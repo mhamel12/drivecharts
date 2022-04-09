@@ -1,7 +1,6 @@
 # drivecharts
 Drive chart generator for (American) Football games
 
-dc.py -h
 usage: dc.py [-h] [-drivedata DRIVEDATA] [-exchangecolor EXCHANGECOLOR] teams
 
 Example:dc.py ATL,NWE -d SB51ATL_Drives_Enhanced.txt,SB51NWE_Drives_Enhanced.txt
