@@ -7,6 +7,7 @@
 # Creative Commons license: http://creativecommons.org/licenses/by-nc-sa/4.0/
 # Attribution-NonCommercial-ShareAlike 4.0 International
 #
+# 11/09/2022  Rev 1.6  Changes to work with matplotlib 3.6.2 and Python 3.10.8
 # 04/09/2022  Rev 1.5  Fix how negative drives are drawn.
 # 04/04/2022  Rev 1.4  Move drive box text for drives starting inside the team's 10 yard line. Also enlarge end zone text.
 # 04/03/2022  Rev 1.3  Cleanup and support for custom strings in drive input files
@@ -554,7 +555,7 @@ for r in home_endzone_rectangles:
     cx = rx + home_endzone_rectangles[r].get_width()/2.0
     cy = ry + home_endzone_rectangles[r].get_height()/2.0
     ax.annotate(r, (cx, cy), color=home_team_secondary_color, weight='bold', 
-                fontsize=30, ha='center', va='center', rotation='90') # used 16 with pixels_per_yard = 1
+                fontsize=30, ha='center', va='center', rotation=90) # used 16 with pixels_per_yard = 1
     # Reference: https://matplotlib.org/stable/tutorials/text/text_props.html                
                 
 road_endzone_rectangles = { team_nicknames[road_abbrev].upper() : patches.Rectangle((yds2px(111)+field_borders,field_borders),yds2px(10),field_height, facecolor=road_team_primary_color) }
@@ -565,7 +566,7 @@ for r in road_endzone_rectangles:
     cx = rx + road_endzone_rectangles[r].get_width()/2.5 # This is not a typo. I find that 270-degree rotated text tends to be rendered off-center (too far to the right) so I adjust the cx coord to shift it back to the left.
     cy = ry + road_endzone_rectangles[r].get_height()/2.0
     ax.annotate(r, (cx, cy), color=road_team_secondary_color, weight='bold', 
-                fontsize=30, ha='center', va='center', rotation='270') # used 16 with pixels_per_yard = 1
+                fontsize=30, ha='center', va='center', rotation=270) # used 16 with pixels_per_yard = 1
                 
 # Note the tweak to the "bottom" and "height" coordinates. When I tried to place the border at 0,0,... the bottom line looked too thin.                
 field_rectangles = { 'outerborder' : patches.Rectangle((0,1),field_width_with_borders,field_height_with_borders-1, facecolor='none', linewidth=1, edgecolor='black'),
@@ -635,7 +636,7 @@ for r in top_yardage_markers:
     cx = rx + top_yardage_markers[r].get_width()/2.0
     cy = ry + top_yardage_markers[r].get_height()/2.0
     ax.annotate(r, (cx, cy), color='w', weight='bold', 
-                fontsize=10, ha='center', va='center', rotation='180')
+                fontsize=10, ha='center', va='center', rotation=180)
 
 
 # ---- Create drive boxes
