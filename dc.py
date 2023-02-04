@@ -7,6 +7,7 @@
 # Creative Commons license: http://creativecommons.org/licenses/by-nc-sa/4.0/
 # Attribution-NonCommercial-ShareAlike 4.0 International
 #
+# 02/04/2023  Rev 1.7  Add time for the end of each drive, labels for each quarter, slightly smarter text placement rules
 # 11/09/2022  Rev 1.6  Changes to work with matplotlib 3.6.2 and Python 3.10.8
 # 04/09/2022  Rev 1.5  Fix how negative drives are drawn.
 # 04/04/2022  Rev 1.4  Move drive box text for drives starting inside the team's 10 yard line. Also enlarge end zone text.
@@ -32,7 +33,7 @@ import numpy as np # added for drawing triangles
 # graphical charts.
 #
 
-DC_PREFIX = " Q TM      P-YD TIME [START] "
+DC_PREFIX = " Q TM      P-YD TIME [START] [END    Q] "
 DC_PREFIX_WIDTH = len(DC_PREFIX)
 FIELD_HEADER = "....'....|....'....|....'....|....'....|....'....|....'....|....'....|....'....|....'....|....'...."
 FIELD_HEADER_WIDTH = len(FIELD_HEADER)
@@ -60,6 +61,28 @@ def get_net_yards_as_string(net_yards_as_int):
         net_yards_as_string = "(" + str(abs(net_yards_as_int)) + ")"    
     return(net_yards_as_string)
     
+def min_sec_from_seconds(seconds):
+    minutes = seconds // 60
+    seconds = seconds - (minutes * 60)
+    return("%d:%02d" % (minutes,seconds))
+    
+def get_end_of_drive_info(quarter_start_of_drive,drive_length_in_time,start_time_of_drive):
+    if drive_length_in_time.count(":") > 0 and start_time_of_drive.count(":") > 0:
+        drive_length_in_seconds = (int(drive_length_in_time.split(":")[0]) * 60) + int(drive_length_in_time.split(":")[1])
+        start_time_of_drive_in_seconds = (int(start_time_of_drive.split(":")[0]) * 60) + int(start_time_of_drive.split(":")[1])
+        
+        if drive_length_in_seconds <= start_time_of_drive_in_seconds:
+            return(quarter_start_of_drive, min_sec_from_seconds(start_time_of_drive_in_seconds - drive_length_in_seconds))
+        
+        # We end up here if the drive extended into the next quarter. This can only happen
+        # in the second and fourth quarters, so we can assume 15 minute quarters.
+        # NFL overtime now 10 minutes, but we should never get here in that case.
+        return(str(int(quarter_start_of_drive)+1), min_sec_from_seconds((15*60) + start_time_of_drive_in_seconds - drive_length_in_seconds))
+    
+    # Best we can do is to return the quarter where the drive started, and a blank string for the ending time
+    return(str(quarter_start_of_drive),"")
+    
+# note that quarter represents the quarter where the drive started    
 def get_dc_string(offensive_team_abbrev,home_team_abbrev,plays,net_yards_as_int,quarter,drive_length_in_time,start_time_of_drive,starting_yard_line,ending_yard_line,result):
 
     #print(offensive_team_abbrev)
@@ -79,7 +102,8 @@ def get_dc_string(offensive_team_abbrev,home_team_abbrev,plays,net_yards_as_int,
     summary = plays + "-" + net_yards_as_string
 
     prefix_width = DC_PREFIX_WIDTH + len(home_team_abbrev) - 1 # assume this abbrev was also passed to get_header_field_string()
-    raw_field = "%2s %2s: %7s %4s [%4s]" % (quarter,offensive_team_abbrev,summary,drive_length_in_time,start_time_of_drive)
+    (quarter_end_of_drive,end_time_of_drive) = get_end_of_drive_info(quarter,drive_length_in_time,start_time_of_drive)
+    raw_field = "%2s %2s: %7s %4s [%5s] [%5s %2s]" % (quarter,offensive_team_abbrev,summary,drive_length_in_time,start_time_of_drive,end_time_of_drive,quarter_end_of_drive)
     raw_field = raw_field + " " * (len(home_team_abbrev) + FIELD_HEADER_WIDTH + len(home_team_abbrev))
 
     if int(plays) > 0:
@@ -118,6 +142,21 @@ pixels_per_yard = 2
 def yds2px(yards):
     return(yards * pixels_per_yard)
 
+# TBD - If the drive box is very short, the text will not fit. The following
+# seems to work most of the time (based on our current definition of yds2px()
+# and the font size we are using for the text), but could we determine the 
+# exact length of the text string and do this adjustment on the fly?
+# https://stackoverflow.com/questions/5320205/matplotlib-text-dimensions
+# my_renderer = fig.canvas.get_renderer()
+def text_not_likely_to_fit_in_drive_box(length_of_drive_box,length_of_text):
+    # If text is 30 characters it seems to fit within a 25-yard drive box.
+    # This function is currently conversative and does a 1:1 comparison of
+    # text length with drive box length.
+    if length_of_text < length_of_drive_box:
+        return False
+        
+    return True
+
 # NFL field dimensions
 # https://static.nfl.com/static/content/public/image/rulebook/pdfs/4_Rule1_The_Field.pdf
 # 360 feet long (120 yards)
@@ -132,6 +171,28 @@ field_borders = yds2px(3)
 # This is supposed to be 12 yards, but on a drive chart that takes up a lot of room.
 yd_mrk_distance_from_border = 2
 yardage_marker_height = 10 # was 4 when pixels_per_yard = 1
+
+# Global array to locate positions for the FIRST, SECOND, ... OT, OT2 labels for
+# the left and right margins.
+quarter_labels_y_offsets_GLOBAL = []
+
+def get_quarter_label_text(quarter):
+    if quarter == 0:
+        return("FIRST")
+    elif quarter == 1:
+        return("SECOND")
+    elif quarter == 2:
+        return("THIRD")
+    elif quarter == 3:
+        return("FOURTH")
+    elif quarter == 4:
+        # Note that OT is returned instead of OVERTIME because the drive chart
+        # for an overtime period can be quite short, which could make it difficult
+        # to fit the word OVERTIME in the margin as a label.
+        return("OT")
+    
+    # return OT2, OT3, etc. for additional overtime periods
+    return("OT" + str(quarter-3))
 
 def get_dc_result_abbrev(result):
     if result == "Field Goal":
@@ -404,6 +465,10 @@ fig, ax = plt.subplots(figsize=(figure_size_width, figure_size_height)) # defaul
 ax.set_xlim([0,field_width_with_borders+1]) # I had trouble with the outer black border looking "solid" unless I added 1 to both of these limits.
 ax.set_ylim([0,field_height_with_borders+1]) 
 
+# The first quarter label will be located between the top of the field and the 
+# (end of) first quarter dashed line.
+quarter_labels_y_offsets_GLOBAL.append(field_borders + field_height)
+
 # Mapping of team abbrevations used by Pro Football Reference to team nicknames.
 # These are designed to cover the Tom Brady era (2000-).
 team_nicknames = { 'NWE' : "Patriots",
@@ -547,7 +612,7 @@ if args.exchangecolor:
 # ---- Draw the football field
 
                                                            # First four args = (left, bottom), width, height
-home_endzone_rectangles = { team_nicknames[home_abbrev].upper() : patches.Rectangle((field_borders,field_borders),yds2px(10),field_height, facecolor=home_team_primary_color) } # was facecolor='silver'
+home_endzone_rectangles = { team_nicknames[home_abbrev].upper() : patches.Rectangle((field_borders,field_borders),yds2px(10),field_height, facecolor=home_team_primary_color) }
                        
 for r in home_endzone_rectangles:
     ax.add_artist(home_endzone_rectangles[r])
@@ -664,22 +729,30 @@ for d in merged_drive_data:
         offensive_team_abbrev = d.split(",")[9]
         starting_yard_line = d.split(",")[11]
         ending_yard_line = d.split(",")[12]
-        (left_coord,width_of_drive_box) = get_dc_coords(offensive_team_abbrev,home_abbrev,plays,net_yards,quarter,length_in_time,start_time_of_drive,starting_yard_line,ending_yard_line,result_of_drive)
+        
+        (quarter_end_of_drive_as_string,time_end_of_drive_as_string) = get_end_of_drive_info(quarter,length_in_time,start_time_of_drive)
+        quarter_end_of_drive = int(quarter_end_of_drive_as_string)
+        
+        (left_coord,width_of_drive_box) = get_dc_coords(offensive_team_abbrev,home_abbrev,plays,net_yards,quarter_end_of_drive,length_in_time,start_time_of_drive,starting_yard_line,ending_yard_line,result_of_drive)
 
-        # Draw a line between each quarter. The lines break up the chart into pieces that are organized by the quarter in which each drive began.
-        if quarter > this_quarter:
+        # Draw a line between each quarter. These lines break up the chart into pieces that are organized by the quarter in which each drive ended.
+        if quarter_end_of_drive > this_quarter:
             quarter_line_name = "Q" + "%d" % this_quarter
             y_coord_for_drive_box += (height_of_drive_box + (space_between_drive_boxes/2))
             dashed_quarter_lines[quarter_line_name] = patches.Rectangle((1, y_coord_for_drive_box), field_width + (field_borders * 2) - 1, 0, linestyle="--", edgecolor='black')
+            
+            # save the y_coord_for_drive_box in our global array that we use for locating the quarter labels
+            quarter_labels_y_offsets_GLOBAL.append(y_coord_for_drive_box)
+            
             y_coord_for_drive_box -= (height_of_drive_box + (space_between_drive_boxes/2))
-            this_quarter = quarter
+            this_quarter = quarter_end_of_drive
         
         # Note on "hatch" patterns that are used for drives that lose yards.
         # Repeating the pattern more than once increases the density of the hatching.
         # See: https://matplotlib.org/stable/api/_as_gen/matplotlib.patches.Patch.html#matplotlib.patches.Patch.set_hatch
         
         if offensive_team_abbrev == home_abbrev:
-            drive_name = "home" + str(home_team_drive_count) + "_" + get_dc_result_abbrev(result_of_drive) + "_" + "%d-%s %s" % (plays,net_yards_as_string,length_in_time) + "_" + optional_comment
+            drive_name = "home" + str(home_team_drive_count) + "_" + "%s" % (time_end_of_drive_as_string) + "_" + get_dc_result_abbrev(result_of_drive) + "_" + "%d-%s %s" % (plays,net_yards_as_string,length_in_time) + "_" + optional_comment
             home_team_drive_count += 1
             if net_yards < 0: # use hatch='///' in the patches.Rectangle call to denote drives that lose yards.
                 home_team_drives[drive_name] = patches.Rectangle((field_borders+yds2px(10)+yds2px(left_coord), y_coord_for_drive_box), yds2px(width_of_drive_box), height_of_drive_box, facecolor=home_team_primary_color, linewidth=2, edgecolor=home_team_secondary_color, hatch='////')
@@ -690,7 +763,7 @@ for d in merged_drive_data:
             
             y_coord_for_drive_box -= (height_of_drive_box + space_between_drive_boxes)
         else:
-            drive_name = "road" + str(road_team_drive_count) + "_" + get_dc_result_abbrev(result_of_drive) + "_" + "%d-%s %s" % (plays,net_yards_as_string,length_in_time) + "_" + optional_comment
+            drive_name = "road" + str(road_team_drive_count) + "_" + "%s" % (time_end_of_drive_as_string) + "_" + get_dc_result_abbrev(result_of_drive) + "_" + "%d-%s %s" % (plays,net_yards_as_string,length_in_time) + "_" + optional_comment
             road_team_drive_count += 1
             if net_yards < 0: # use hatch='///' in the patches.Rectangle call to denote drives that lose yards.
                 road_team_drives[drive_name] = patches.Rectangle((field_borders+yds2px(10)+yds2px(left_coord), y_coord_for_drive_box), yds2px(width_of_drive_box), height_of_drive_box, facecolor=road_team_primary_color, linewidth=2, edgecolor=road_team_secondary_color, hatch='////')
@@ -705,18 +778,18 @@ for d in merged_drive_data:
 # https://matplotlib.org/stable/tutorials/text/text_props.html   
 
 for r in home_team_drives:
-    res_abbrev = r.split("_")[1]
-    details_abbrev = r.split("_")[2]
-    comment_abbrev = r.split("_")[3]
-    text_string_to_apply = comment_abbrev + " (" + details_abbrev + ") " + res_abbrev
+    time_end_of_drive_abbrev = r.split("_")[1]
+    res_abbrev = r.split("_")[2]
+    details_abbrev = r.split("_")[3]
+    comment_abbrev = r.split("_")[4]
+    if len(comment_abbrev) > 0:
+        comment_abbrev = comment_abbrev + ", "
+    text_string_to_apply = "(" + details_abbrev + ") " + time_end_of_drive_abbrev + ", " + comment_abbrev + res_abbrev
     ax.add_artist(home_team_drives[r])
     rx, ry = home_team_drives[r].get_xy()
     
-    # TBD - If the drive is very short, the text will not fit. 15 yards seems to be a good minimum,
-    # but could we determine the exact length of the text string and do this adjustment on the fly?
-    # https://stackoverflow.com/questions/5320205/matplotlib-text-dimensions
-    # my_renderer = fig.canvas.get_renderer()
-    if home_team_drives[r].get_width() < yds2px(15):
+    if text_not_likely_to_fit_in_drive_box(home_team_drives[r].get_width(),len(text_string_to_apply)):
+#    if home_team_drives[r].get_width() < yds2px(25):
          # place the text outside of the text box and use black as the text color
         if rx < field_borders+yds2px(20): # borders + endzone + 10 == drives that start inside the home team's 10 yard line
             # place text to the RIGHT of the drive box and the right-hand facing arrow
@@ -732,16 +805,18 @@ for r in home_team_drives:
     # print("%s is %d wide, %d high (width of box is %d)" % (text_string_to_apply,text_box.width,text_box.height,home_team_drives[r].get_width()))
     
 for r in road_team_drives:
-    res_abbrev = r.split("_")[1]
-    details_abbrev = r.split("_")[2]
-    comment_abbrev = r.split("_")[3]
-    text_string_to_apply =  res_abbrev + " (" + details_abbrev + ") " + comment_abbrev
+    time_end_of_drive_abbrev = r.split("_")[1]
+    res_abbrev = r.split("_")[2]
+    details_abbrev = r.split("_")[3]
+    comment_abbrev = r.split("_")[4]
+    if len(comment_abbrev) > 0:
+        comment_abbrev = comment_abbrev + ", "
+    text_string_to_apply =  res_abbrev + ", " + comment_abbrev + time_end_of_drive_abbrev + " (" + details_abbrev + ") "
     ax.add_artist(road_team_drives[r])
     rx, ry = road_team_drives[r].get_xy()
     
-    # TBD - If the drive is very short, the text will not fit. 15 yards seems to be a good minimum,
-    # but could we determine the exact length of the text string and do this adjustment on the fly?
-    if road_team_drives[r].get_width() < yds2px(15):
+    if text_not_likely_to_fit_in_drive_box(road_team_drives[r].get_width(),len(text_string_to_apply)):
+#    if road_team_drives[r].get_width() < yds2px(25):
          # place the text outside of the text box and use black as the text color
         if rx+road_team_drives[r].get_width() > field_borders+yds2px(100): # borders + endzone + 90 == drives that start inside the road team's 10 yard line
             # place text to the LEFT of the drive box and the left-hand facing arrow
@@ -752,6 +827,38 @@ for r in road_team_drives:
     else:
         # place the text on top of the drive box, left-justified
         ax.text(rx, 0.5*(ry+ry+road_team_drives[r].get_height()), text_string_to_apply, ha='left', va='center', color='white', weight='bold', fontsize=9)
+
+# The first quarter label will be located between the bottom of the field and the 
+# last quarter dashed line.
+quarter_labels_y_offsets_GLOBAL.append(field_borders)
+# print(quarter_labels_y_offsets_GLOBAL) # TBD - temp print
+
+quarter_labels_road_dictionary = {}
+quarter_labels_home_dictionary = {}
+quarter_labels_count = len(quarter_labels_y_offsets_GLOBAL)
+n = 0
+while n < (quarter_labels_count-1):
+    # Home team is shown to the left, Road team to the right
+    quarter_labels_home_dictionary[get_quarter_label_text(n)] = patches.Rectangle((field_borders / 2,quarter_labels_y_offsets_GLOBAL[n+1]),field_borders/2,(quarter_labels_y_offsets_GLOBAL[n] - quarter_labels_y_offsets_GLOBAL[n+1]), facecolor='white')
+    quarter_labels_road_dictionary[get_quarter_label_text(n)] = patches.Rectangle((field_width_with_borders - field_borders,quarter_labels_y_offsets_GLOBAL[n+1]),field_borders/2,(quarter_labels_y_offsets_GLOBAL[n] - quarter_labels_y_offsets_GLOBAL[n+1]), facecolor='white')
+    n = n+1
+
+for label in quarter_labels_home_dictionary:
+    ax.add_artist(quarter_labels_home_dictionary[label])
+    rx, ry = quarter_labels_home_dictionary[label].get_xy()
+    cx = rx + quarter_labels_home_dictionary[label].get_width()/2.0
+    cy = ry + quarter_labels_home_dictionary[label].get_height()/2.0
+    ax.annotate(label, (cx, cy), color='black', weight='bold', 
+                fontsize=10, ha='center', va='center', rotation=90) 
+
+for label in quarter_labels_road_dictionary:
+    ax.add_artist(quarter_labels_road_dictionary[label])
+    rx, ry = quarter_labels_road_dictionary[label].get_xy()
+    cx = rx + quarter_labels_road_dictionary[label].get_width()/2.5 # This is not a typo. I find that 270-degree rotated text tends to be rendered off-center (too far to the right) so I adjust the cx coord to shift it back to the left.
+    cy = ry + quarter_labels_road_dictionary[label].get_height()/2.0
+    ax.annotate(label, (cx, cy), color='black', weight='bold', 
+                fontsize=10, ha='center', va='center', rotation=270) 
+
     
 for q in dashed_quarter_lines:
     ax.add_artist(dashed_quarter_lines[q])
