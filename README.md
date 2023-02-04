@@ -13,6 +13,6 @@ Input files must match the .csv format used by Pro Football Reference (https://w
 
 Team colors and nicknames in the script are mostly up-to-date for the 2022 season, with a few limited 'historical' teams.
 
-Horizontal dashed lines separate each quarter. Drives that span two quarters are presented as having taken place in the quarter where the drive began.
+Horizontal dashed lines separate each quarter. Drives that span two quarters are presented as having taken place in the quarter where the drive ended.
 
 Lightly tested, with lots of room for improvement. For example, hard-coded values are used to determine if the description of a drive can "fit" inside the drive rectangle or not, and the logic that determines whether the drive details are presented to the left or right of the rectangle could use some tweaking. Also, kickoff/punt returns for touchdowns are not included.
